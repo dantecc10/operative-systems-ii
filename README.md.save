@@ -41,7 +41,6 @@ Administrador de la memoria
 - No existe el intercambio y paginación
   - Sólo en memoria principal
 
-
 ### Monoprogramación
 Un sólo proceso en memoria y el proceso ocupa toda la memoria
 
@@ -76,3 +75,5 @@ El almacenamiento virtual se asocia con la capacidad de direccionar un espacio d
     - Paginación
     - Segmentación
     - Paginación / segmentación
+
+
