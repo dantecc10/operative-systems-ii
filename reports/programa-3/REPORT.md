@@ -231,6 +231,9 @@ int main(int argc, char **argv) {
         case 3:
             modo_auto(&s);
             break;
+        case 4:
+            modo_menu(&s);
+            break;
         default:
             uso(argv[0]);
             return 1;
@@ -241,6 +244,58 @@ int main(int argc, char **argv) {
 ```
 
 **Explicación:** En lugar de un menú interactivo con `scanf`, el programa recibe la opción como argumento de línea de comandos. Esto permite tanto el uso interactivo (`./program-3 1` y luego ingresar datos) como el uso automatizado.
+
+### 5.9 Modo menú interactivo (agregar + liberar)
+
+El modo 4 implementa un menú interactivo continuo que permite agregar y liberar procesos sin salir del programa:
+
+```c
+void modo_menu(Sistema *s) {
+    int opcion;
+    char linea[128];
+    int pid, bloques;
+    char nombre[MAX_NOMBRE];
+
+    do {
+        mostrar_estado(s);
+        printf("\n1. Agregar proceso\n");
+        printf("2. Liberar proceso\n");
+        printf("3. Ver estado\n");
+        printf("4. Salir\n");
+        printf("Seleccione: ");
+
+        if (fgets(linea, sizeof(linea), stdin) == NULL) break;
+        opcion = atoi(linea);
+
+        switch (opcion) {
+            case 1:
+                /* Agregar proceso */
+                if (s->num_procesos >= MAX_PROCESOS) {
+                    printf("[!] Cola de procesos llena.\n");
+                    break;
+                }
+                /* ... solicitar PID, nombre, bloques ... */
+                break;
+            case 2:
+                /* Liberar proceso */
+                if (s->num_procesos == 0) {
+                    printf("[!] No hay procesos activos.\n");
+                    break;
+                }
+                /* ... solicitar PID ... */
+                break;
+            case 3:
+                /* Ver estado (ya se muestra al inicio) */
+                break;
+            case 4:
+                printf("Saliendo del menu...\n");
+                break;
+        }
+    } while (opcion != 4);
+}
+```
+
+**Explicación:** Este modo combina las funcionalidades de agregar y liberar en un solo bucle interactivo. Después de cada operación se muestra el estado actualizado de la memoria, y el usuario puede seguir operando hasta que elija salir con la opción 4.
 
 ### 5.9 Modo automático (demostración)
 
@@ -254,7 +309,184 @@ El modo automático ejecuta una secuencia predefinida que muestra:
 
 Cada paso incluye una pausa (`usleep`) para que el usuario pueda observar los cambios en la pantalla.
 
-## 6. Ejecución
+## 6. Diagramas de flujo
+
+### 6.1 Flujo principal `main()`
+
+```mermaid
+flowchart TD
+    A["Inicio main()"] --> B{"argc < 2"}
+    B -->|"Sí"| C["uso(argv[0])"]
+    C --> D["return 1"]
+    B -->|"No"| E["sistema_init(&s)"]
+    E --> F["atoi(argv[1])"]
+    F --> G{"opcion"}
+    G -->|"1"| H["mostrar_estado(&s)"]
+    H --> I["modo_crear(&s)"]
+    I --> J["mostrar_estado(&s)"]
+    G -->|"2"| K["mostrar_estado(&s)"]
+    K --> L["modo_liberar(&s)"]
+    L --> M["mostrar_estado(&s)"]
+    G -->|"3"| N["modo_auto(&s)"]
+    G -->|"4"| O["modo_menu(&s)"]
+    G -->|"Otro"| P["uso(argv[0])"]
+    P --> Q["return 1"]
+    J --> R["return 0"]
+    M --> R
+    N --> R
+    O --> R
+```
+
+### 6.2 Asignación de memoria `asignar_memoria()` (first-fit)
+
+```mermaid
+flowchart TD
+    A["asignar_memoria(s)"] --> B["j = 0"]
+    B --> C{"j < s->num_procesos"}
+    C -->|"No"| D["Fin"]
+    C -->|"Sí"| E["p = &s->procesos[j]"]
+    E --> F{"p->bloques_cargados < p->bloques_total"}
+    F -->|"No"| G["j++"]
+    G --> C
+    F -->|"Sí"| H["libre = -1"]
+    H --> I["i = 0"]
+    I --> J{"i < TOTAL_FRAMES"}
+    J -->|"No"| K{"libre == -1"}
+    J -->|"Sí"| L{"s->marcos[i] == -1"}
+    L -->|"Sí"| M["libre = i"]
+    M --> K
+    L -->|"No"| N["i++"]
+    N --> J
+    K -->|"Sí"| O["break — memoria física llena"]
+    O --> G
+    K -->|"No"| P["s->marcos[libre] = p->pid"]
+    P --> Q["p->bloques_cargados++"]
+    Q --> F
+```
+
+### 6.3 Función `agregar_proceso()`
+
+```mermaid
+flowchart TD
+    A["agregar_proceso(s, pid, nombre, bloques)"] --> B{"num_procesos >= MAX_PROCESOS"}
+    B -->|"Sí"| C["return -1 — cola llena"]
+    B -->|"No"| D["buscar_proceso(s, pid)"]
+    D --> E{"resultado != -1"}
+    E -->|"Sí"| F["return -2 — PID duplicado"]
+    E -->|"No"| G{"bloques <= 0 || > TOTAL_FRAMES"}
+    G -->|"Sí"| H["return -3 — bloques inválidos"]
+    G -->|"No"| I["p = &procesos[num_procesos]"]
+    I --> J["p->pid = pid"]
+    J --> K["strncpy(p->nombre, nombre)"]
+    K --> L["p->bloques_total = bloques"]
+    L --> M["p->bloques_cargados = 0"]
+    M --> N["num_procesos++"]
+    N --> O["asignar_memoria(s)"]
+    O --> P["return 0 — éxito"]
+```
+
+### 6.4 Función `liberar_proceso()`
+
+```mermaid
+flowchart TD
+    A["liberar_proceso(s, pid)"] --> B["idx = buscar_proceso(s, pid)"]
+    B --> C{"idx == -1"}
+    C -->|"Sí"| D["return -1 — no encontrado"]
+    C -->|"No"| E["Copiar nombre_eliminado"]
+    E --> F["i = 0"]
+    F --> G{"i < TOTAL_FRAMES"}
+    G -->|"No"| H["Desplazar procesos"]
+    G -->|"Sí"| I{"s->marcos[i] == pid"}
+    I -->|"Sí"| J["s->marcos[i] = -1"]
+    I -->|"No"| K["i++"]
+    J --> K
+    K --> G
+    H --> L["for j = idx hasta num_procesos-2"]
+    L --> M["procesos[j] = procesos[j+1]"]
+    M --> N["num_procesos--"]
+    N --> O["asignar_memoria(s)"]
+    O --> P["printf proceso eliminado"]
+    P --> Q["return 0"]
+```
+
+### 6.5 Menú interactivo `modo_menu()`
+
+```mermaid
+flowchart TD
+    A["modo_menu(s)"] --> B["do"]
+    B --> C["mostrar_estado(s)"]
+    C --> D["Mostrar opciones"]
+    D --> E["fgets(linea)"]
+    E --> F["opcion = atoi(linea)"]
+    F --> G{"opcion"}
+    G -->|"1"| H{"num_procesos >= MAX"}
+    H -->|"Sí"| I["print: cola llena"]
+    H -->|"No"| J["Solicitar PID, nombre, bloques"]
+    J --> K["agregar_proceso(s, ...)"]
+    G -->|"2"| L{"num_procesos == 0"}
+    L -->|"Sí"| M["print: no hay procesos"]
+    L -->|"No"| N["Solicitar PID"]
+    N --> O["liberar_proceso(s, pid)"]
+    G -->|"3"| P["Ver estado (ya se muestra)"]
+    G -->|"4"| Q["print: saliendo"]
+    G -->|"Otro"| R["print: opción inválida"]
+    I --> S{"opcion != 4"}
+    J --> S
+    K --> S
+    M --> S
+    O --> S
+    P --> S
+    Q --> S
+    R --> S
+    S -->|"Sí"| B
+    S -->|"No"| T["Fin"]
+```
+
+### 6.6 Modo automático `modo_auto()`
+
+```mermaid
+flowchart TD
+    A["modo_auto(s)"] --> B["print: MODO AUTOMÁTICO"]
+    B --> C["Paso 1: Crear procesos"]
+    C --> D["agregar_proceso(100, navegador, 5)"]
+    D --> E["mostrar_estado"]
+    E --> F["usleep(1200000)"]
+    F --> G["agregar_proceso(200, editor, 3)"]
+    G --> H["mostrar_estado"]
+    H --> I["usleep(1200000)"]
+    I --> J["agregar_proceso(300, terminal, 4)"]
+    J --> K["mostrar_estado"]
+    K --> L["Paso 2: Agregar más procesos"]
+    L --> M["agregar_proceso(400, servidor, 3)"]
+    M --> N["agregar_proceso(500, compilador, 2)"]
+    N --> O["Paso 3: Liberar editor"]
+    O --> P["liberar_proceso(200)"]
+    P --> Q["mostrar_estado"]
+    Q --> R["Paso 4: Liberar terminal + crear juego"]
+    R --> S["liberar_proceso(300)"]
+    S --> T["agregar_proceso(600, juego, 6)"]
+    T --> U["Paso 5: Intentar gigante"]
+    U --> V["agregar_proceso(700, gigante, 15)"]
+    V --> W["Paso 6: Liberar todos"]
+    W --> X["liberar 100, 400, 500, 600, 700"]
+    X --> Y["mostrar_estado"]
+    Y --> Z["print: DEMO COMPLETADA"]
+```
+
+### 6.7 Función `buscar_proceso()`
+
+```mermaid
+flowchart TD
+    A["buscar_proceso(s, pid)"] --> B["i = 0"]
+    B --> C{"i < s->num_procesos"}
+    C -->|"No"| D["return -1"]
+    C -->|"Sí"| E{"s->procesos[i].pid == pid"}
+    E -->|"Sí"| F["return i"]
+    E -->|"No"| G["i++"]
+    G --> C
+```
+
+## 7. Ejecución
 
 ```bash
 cd programs
@@ -268,9 +500,12 @@ gcc -O2 -Wall -Wextra -o program-3 program-3.c
 
 # Liberar proceso (interactivo)
 ./program-3 2
+
+# Menú interactivo (agregar + liberar)
+./program-3 4
 ```
 
-## 7. Cumplimiento del enunciado
+## 8. Cumplimiento del enunciado
 
 - Simula memoria fisica con marcos de página: cumplido (arreglo de 16 enteros).
 - Permite crear procesos que se dividen en bloques: cumplido (`agregar_proceso`).
@@ -279,8 +514,9 @@ gcc -O2 -Wall -Wextra -o program-3 program-3.c
 - Permite liberar procesos y reasignar memoria: cumplido (`liberar_proceso`).
 - Visualización dinámica del estado: cumplido (se muestra antes y después de cada operación).
 - Modo automático para demostración: cumplido (`modo_auto`).
+- Menú interactivo para agregar/liberar: cumplido (`modo_menu`).
 
-## 8. Conclusión
+## 9. Conclusión
 
 Se demuestran los conceptos fundamentales de paginación en sistemas operativos: la memoria física se divide en marcos de tamaño fijo, los procesos se dividen en bloques (páginas) que se cargan en marcos disponibles, y cuando un proceso termina sus marcos se liberan para ser reasignados.
 
@@ -288,7 +524,7 @@ Lo más interesante de esta implementación es el patrón de "asignar después d
 
 La visualización con colores ANSI hace evidente el estado del sistema en cada momento: se puede ver instantaneamente cuantos marcos están ocupados, por cuáles procesos, y cuáles procesos están esperando memoria.
 
-## 9. Anexo A - Comandos usados
+## 10. Anexo A - Comandos usados
 
 ```bash
 cd programs
@@ -296,9 +532,10 @@ gcc -O2 -Wall -Wextra -o program-3 program-3.c
 ./program-3 3    # demo automatica
 ./program-3 1    # crear proceso
 ./program-3 2    # liberar proceso
+./program-3 4    # menu interactivo
 ```
 
-## 10. Bitácora de prompts
+## 11. Bitácora de prompts
 
 Prompts usados para llegar al resultado final:
 

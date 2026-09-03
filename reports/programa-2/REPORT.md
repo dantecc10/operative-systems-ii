@@ -261,16 +261,185 @@ El programa recibe un argumento numérico opcional:
 ```bash
 ./program-2        # modo 1 (por defecto): tope = RAM física (~14.91 GiB aquí)
 ./program-2 2      # modo 2: RAM + swap (~57 GiB aquí)
-./program-2 3	   # modo 3: tope hardcodeado
-./program-2 4      # modo 4: sin tope, lo máximo que malloc devuelva
+./program-2 3      # modo 3: tope hardcodeado
 ```
 
 - **Modo 1 (por defecto):** busca el bloque más grande *utilizable* dentro de la RAM física real. Es seguro: al tocar la memoria no se excede la RAM y no hay riesgo de thrashing ni OOM.
 - **Modo 2:** permite usar también el swap; el bloque puede ser mucho mayor, pero llenarlo entero implica pasar gigabytes por el swap y el sistema puede volverse muy lento.
 - **Modo 3:** hardcodeamos un tope de bytes para la RAM a reservar. Útil para hacer pruebas y verificar el funcionamiento del programa.
-- **Modo 4:** sin tope; es el caso extremo y solo tiene sentido si el sistema tiene overcommit que permita respaldar la memoria.
 
-## 6. Ejecución
+## 6. Diagramas de flujo
+
+### 6.1 Flujo principal `main()`
+
+```mermaid
+flowchart TD
+    A["Inicio main()"] --> B["Leer argv[1] con atoi"]
+    B --> C{"modo"}
+    C -->|"1"| D["tope = physical_ram()"]
+    C -->|"2"| E["tope = ram_and_swap()"]
+    C -->|"3"| F["tope = 1143525669"]
+    D --> G["buscar_maximo(tope)"]
+    E --> G
+    F --> G
+    G --> H["bloque_tam = resultado"]
+    H --> I["memoria = malloc(bloque_tam)"]
+    I --> J{"memoria == NULL"}
+    J -->|"Sí"| K["perror('malloc')"]
+    K --> L["return 1"]
+    J -->|"No"| M["Recorrer DIRECTORIOS[]"]
+    M --> N["opendir(DIRECTORIOS[i])"]
+    N --> O{"Se pudo abrir"}
+    O -->|"No"| P["i++"]
+    P --> Q{"Hay más directorios"}
+    Q -->|"Sí"| N
+    Q -->|"No"| R["qsort(archivos)"]
+    O -->|"Sí"| S["readdir(dir)"]
+    S --> T{"Hay entrada"}
+    T -->|"No"| U["closedir(dir)"]
+    U --> P
+    T -->|"Sí"| V["stat(ruta, &st)"]
+    V --> W{"Es archivo regular"}
+    W -->|"No"| S
+    W -->|"Sí"| X["realloc + guardar archivo"]
+    X --> S
+    R --> Y["Loop de carga"]
+    Y --> Z{"i < n_archivos"}
+    Z -->|"Sí"| AA{"tamano > bloque_tam - usado"}
+    AA -->|"Sí"| AB["i++"]
+    AB --> Z
+    AA -->|"No"| AC["fopen(ruta, 'rb')"]
+    AC --> AD["fread(memoria + usado, ...)"]
+    AD --> AE["usado += tamano"]
+    AE --> AF["dibujar(...)"]
+    AF --> AB
+    Z -->|"No"| AG["Imprimir resumen"]
+    AG --> AH["free(memoria)"]
+    AH --> AI["return 0"]
+```
+
+### 6.2 Búsqueda binaria `buscar_maximo()`
+
+```mermaid
+flowchart TD
+    A["buscar_maximo(tope)"] --> B{"tope == SIZE_MAX"}
+    B -->|"Sí"| C["n = 1"]
+    C --> D{"se_puede(n)"}
+    D -->|"Sí"| E{"n > SIZE_MAX/2"}
+    E -->|"Sí"| F["lo = n, hi = SIZE_MAX"]
+    E -->|"No"| G["n = n * 2"]
+    G --> D
+    D -->|"No"| H["lo = n/2, hi = n"]
+    B -->|"No"| I["lo = 0, hi = tope"]
+    F --> J["while (lo < hi)"]
+    H --> J
+    I --> J
+    J --> K["mid = lo + (hi - lo + 1) / 2"]
+    K --> L{"se_puede(mid)"}
+    L -->|"Sí"| M["lo = mid"]
+    L -->|"No"| N["hi = mid - 1"]
+    M --> J
+    N --> J
+    J -->|"lo >= hi"| O["return lo"]
+```
+
+### 6.3 Función `se_puede()`
+
+```mermaid
+flowchart TD
+    A["se_puede(tamano)"] --> B{"tamano == 0"}
+    B -->|"Sí"| C["return 0"]
+    B -->|"No"| D["p = malloc(tamano)"]
+    D --> E{"p == NULL"}
+    E -->|"Sí"| F["return 0"]
+    E -->|"No"| G["free(p)"]
+    G --> H["return 1"]
+```
+
+### 6.4 Carga de binarios al bloque
+
+```mermaid
+flowchart TD
+    A["i = 0"] --> B{"i < n_archivos"}
+    B -->|"No"| C["Fin del loop"]
+    B -->|"Sí"| D{"tamano > bloque_tam - usado"}
+    D -->|"Sí"| E["i++"]
+    E --> B
+    D -->|"No"| F["fopen(archivos[i].ruta, 'rb')"]
+    F --> G{"f == NULL"}
+    G -->|"Sí"| E
+    G -->|"No"| H["fread(memoria + usado, 1, tamano, f)"]
+    H --> I{"leido == tamano"}
+    I -->|"No"| J["fclose(f)"]
+    J --> E
+    I -->|"Sí"| K{"n_cargados == cap_cargados"}
+    K -->|"Sí"| L["realloc(cargados, nueva_cap)"]
+    K -->|"No"| M["cargados[n_cargados].offset = usado"]
+    L --> M
+    M --> N["usado += archivos[i].tamano"]
+    N --> O["n_cargados++"]
+    O --> P["dibujar(...)"]
+    P --> J
+```
+
+### 6.5 Función `dibujar()`
+
+```mermaid
+flowchart TD
+    A["dibujar(bloque_tam, usado, cargados, n, ultimo)"] --> B["printf('\\033[2J\\033[H')"]
+    B --> C["Imprimir encabezado"]
+    C --> D["memset(barra, '.', ANCHO_BARRA)"]
+    D --> E["pos = 0"]
+    E --> F{"i < n && pos < ANCHO_BARRA"}
+    F -->|"No"| G["Imprimir barra"]
+    F -->|"Sí"| H["w = tamano * 70 / bloque_tam"]
+    H --> I{"w == 0"}
+    I -->|"Sí"| J["w = 1"]
+    I -->|"No"| K{"pos + w > ANCHO_BARRA"}
+    J --> K
+    K -->|"Sí"| L["w = ANCHO_BARRA - pos"]
+    K -->|"No"| M["memset(barra+pos, relleno, w)"]
+    L --> M
+    M --> N{"strlen(nombre) + 2 <= w"}
+    N -->|"Sí"| O["memcpy(barra+ini, nombre)"]
+    N -->|"No"| P["pos += w"]
+    O --> P
+    P --> Q["i++"]
+    Q --> F
+    G --> R["Imprimir leyenda"]
+```
+
+### 6.6 Búsqueda de archivos en disco
+
+```mermaid
+flowchart TD
+    A["i = 0"] --> B{"DIRECTORIOS[i] != NULL"}
+    B -->|"No"| C["Fin"]
+    B -->|"Sí"| D["dir = opendir(DIRECTORIOS[i])"]
+    D --> E{"dir == NULL"}
+    E -->|"Sí"| F["i++"]
+    F --> B
+    E -->|"No"| G["readdir(dir)"]
+    G --> H{"Hay entrada"}
+    H -->|"No"| I["closedir(dir)"]
+    I --> F
+    H -->|"Sí"| J{"strcmp nombre '.' o '..'"}
+    J -->|"Sí"| G
+    J -->|"No"| K["snprintf(ruta, '%s/%s')"]
+    K --> L["stat(ruta, &st)"]
+    L --> M{"stat falló"}
+    M -->|"Sí"| G
+    M -->|"No"| N{"S_ISREG && st_size > 0"}
+    N -->|"No"| G
+    N -->|"Sí"| O{"n_archivos == cap_archivos"}
+    O -->|"Sí"| P["realloc(archivos, nueva_cap)"]
+    O -->|"No"| Q["Guardar ruta, nombre, tamano"]
+    P --> Q
+    Q --> R["n_archivos++"]
+    R --> G
+```
+
+## 7. Ejecución
 
 ```bash
 cd programs
@@ -278,7 +447,7 @@ gcc -O2 -Wall -Wextra -o program-2 program-2.c
 ./program-2
 ```
 
-## 7. Corridas y evidencias
+## 8. Corridas y evidencias
 
 ### Evidencia 1 - Reserva del bloque máximo de memoria
 
@@ -298,13 +467,7 @@ Conforme avanzan las iteraciones, la barra muestra más segmentos (cada uno con 
 
 ![El bloque de memoria se va llenando](assets/img/exec3.png)
 
-### Evidencia 4 - Resumen final
-
-Al final se imprime un resumen: bloque reservado, bytes ocupados, porcentaje, cuántos programas se lanzaron de los encontrados y el estado final (BLOQUE LLENO o "no caben más binarios").
-
-![Resumen final](assets/img/exec4.png)
-
-## 8. Cumplimiento del enunciado
+## 9. Cumplimiento del enunciado
 
 - Obtiene el bloque de memoria RAM más grande que `malloc` permite usar: cumplido (búsqueda binaria según modo 1/2/3).
 - Recorre el disco duro con `opendir`, `readdir` y `stat`: cumplido (7 directorios del sistema).
@@ -313,7 +476,7 @@ Al final se imprime un resumen: bloque reservado, bytes ocupados, porcentaje, cu
 - Lo repite hasta que el bloque se llena: cumplido (carga mientras quepa espacio; termina cuando ya no cabe ningún binario).
 - Visualización dinámica ASCII de los programas lanzados: cumplido (barra de mapa de memoria, leyenda y `>>> Lanzando <<<`).
 
-## 9. Bitácora de prompts
+## 10. Bitácora de prompts
 
 **Instrucción**: Registra todo lo que se pregunta a la IA para realizar cada una de las partes del programa.
 
@@ -329,13 +492,13 @@ Al final se imprime un resumen: bloque reservado, bytes ocupados, porcentaje, cu
 - ¿Qué parte aún no se entiende al 100%?
 - ¿Qué sucede en memoria/sistema?
 
-## 10. Conclusión
+## 11. Conclusión
 
 El programa simula de forma muy cercana lo que hace un administrador de memoria en multiprogramación: un único bloque contiguo (la memoria principal) que se va repartiendo entre los programas que se cargan desde la memoria secundaria (el disco). La búsqueda binaria aprovecha que `malloc` es una función monótona y encuentra el máximo muy rápido, y el uso de `opendir`/`readdir`/`stat` permite leer el directorio de archivos del sistema tal como lo haría un cargador real.
 
 La parte más interesante fue decidir cómo verificar que el bloque realmente se puede usar: en lugar de tocar cada página en cada prueba (muy lento cerca del máximo), se confía en el overcommit por defecto de Linux, que hace que `malloc` rechace peticiones imposibles, y la propia copia de los binarios confirma que la memoria es real. La visualización en ASCII hace evidente cómo los programas se van "lanzando" y cómo el espacio libre se reduce hasta que el bloque queda lleno.
 
-## 10. Anexo - Comandos usados
+## 12. Anexo - Comandos usados
 
 ```bash
 # Compilar
@@ -347,8 +510,7 @@ gcc -O2 -Wall -Wextra -o program-2 program-2.c
 
 # Otros modos
 ./program-2 2   # RAM + swap
-./program-2 3	# tope hardcodeado (en bytes)
-./program-2 4   # sin tope
+./program-2 3   # tope hardcodeado (en bytes)
 
 # Ver memoria del sistema
 free -h

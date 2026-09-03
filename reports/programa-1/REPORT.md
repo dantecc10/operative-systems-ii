@@ -26,7 +26,7 @@ Compilación:
 
 ```bash
 cd programs
-gcc -O2 -Wall -o program-1 program-1.c
+gcc -O2 -Wall -o program-x program-x.c
 ```
 
 ## 5. Implementación realizada
@@ -189,15 +189,153 @@ int main() {
 
 La función `rewinddir` es fundamental: sin ella, `readdir` no volvería al principio del directorio en el siguiente ciclo. Cada iteración del bucle `while(1)` es un ciclo completo de monitoreo.
 
-## 6. Ejecución
+## 6. Diagramas de flujo
+
+### 6.1 Flujo principal `main()`
+
+```mermaid
+flowchart TD
+    A["Inicio main()"] --> B["opendir('/proc')"]
+    B --> C{"Se pudo abrir"}
+    C -->|"No"| D["perror('No se pudo abrir /proc')"]
+    D --> E["return 1"]
+    C -->|"Sí"| F["while(1)"]
+    F --> G["rewinddir(directorio)"]
+    G --> H["marcar_no_vistos(lista)"]
+    H --> I["readdir(directorio)"]
+    I --> J{"Hay entrada"}
+    J -->|"No"| K["eliminar_no_vistos(&lista)"]
+    K --> L["imprimir_lista(lista)"]
+    L --> M["sleep(1)"]
+    M --> F
+    J -->|"Sí"| N{"es_numero(entrada->d_name)"}
+    N -->|"No"| I
+    N -->|"Sí"| O["pid = atoi(entrada->d_name)"]
+    O --> P["buscar_pid(lista, pid)"]
+    P --> Q{"nodo != NULL"}
+    Q -->|"Sí"| R["nodo->visto = 1"]
+    R --> I
+    Q -->|"No"| S["agregar(&lista, pid)"]
+    S --> I
+```
+
+### 6.2 Función `es_numero()`
+
+```mermaid
+flowchart TD
+    A["es_numero(nombre)"] --> B{"nombre[0] == '\\0'"}
+    B -->|"Sí"| C["return 0"]
+    B -->|"No"| D["i = 0"]
+    D --> E{"nombre[i] != '\\0'"}
+    E -->|"No"| F["return 1"]
+    E -->|"Sí"| G{"isdigit((unsigned char)nombre[i])"}
+    G -->|"No"| C
+    G -->|"Sí"| H["i++"]
+    H --> E
+```
+
+### 6.3 Función `buscar_pid()`
+
+```mermaid
+flowchart TD
+    A["buscar_pid(lista, pid)"] --> B["actual = lista"]
+    B --> C{"actual != NULL"}
+    C -->|"No"| D["return NULL"]
+    C -->|"Sí"| E{"actual->pid == pid"}
+    E -->|"Sí"| F["return actual"]
+    E -->|"No"| G["actual = actual->siguiente"]
+    G --> C
+```
+
+### 6.4 Función `agregar()`
+
+```mermaid
+flowchart TD
+    A["agregar(lista, pid)"] --> B["nuevo = malloc(sizeof Nodo)"]
+    B --> C{"nuevo == NULL"}
+    C -->|"Sí"| D["perror('Error al reservar memoria')"]
+    D --> E["return"]
+    C -->|"No"| F["nuevo->pid = pid"]
+    F --> G["nuevo->visto = 1"]
+    G --> H["nuevo->siguiente = NULL"]
+    H --> I{"*lista == NULL"}
+    I -->|"Sí"| J["*lista = nuevo"]
+    J --> K["return"]
+    I -->|"No"| L["actual = *lista"]
+    L --> M{"actual->siguiente != NULL"}
+    M -->|"Sí"| N["actual = actual->siguiente"]
+    N --> M
+    M -->|"No"| O["actual->siguiente = nuevo"]
+```
+
+### 6.5 Función `eliminar_no_vistos()`
+
+```mermaid
+flowchart TD
+    A["eliminar_no_vistos(lista)"] --> B["actual = *lista"]
+    B --> C["anterior = NULL"]
+    C --> D{"actual != NULL"}
+    D -->|"No"| E["Fin"]
+    D -->|"Sí"| F{"actual->visto == 0"}
+    F -->|"Sí"| G{"anterior == NULL"}
+    G -->|"Sí"| H["*lista = actual->siguiente"]
+    G -->|"No"| I["anterior->siguiente = actual->siguiente"]
+    H --> J["temp = actual"]
+    I --> J
+    J --> K["actual = anterior == NULL ? *lista : anterior->siguiente"]
+    K --> L["free(temp)"]
+    L --> D
+    F -->|"No"| M["anterior = actual"]
+    M --> N["actual = actual->siguiente"]
+    N --> D
+```
+
+### 6.6 Patrón de ciclo de vida (marco conceptual)
+
+```mermaid
+flowchart LR
+    subgraph Paso1["Paso 1: Marcar no vistos"]
+        A1["recorrer lista"]
+        A2["nodo->visto = 0"]
+        A1 --> A2
+    end
+
+    subgraph Paso2["Paso 2: Leer /proc"]
+        B1["readdir(directorio)"]
+        B2{"es_numero"}
+        B3["buscar_pid(lista, pid)"]
+        B4{"Existe"}
+        B5["nodo->visto = 1"]
+        B6["agregar(&lista, pid)"]
+        B1 --> B2
+        B2 -->|"Sí"| B3
+        B3 --> B4
+        B4 -->|"Sí"| B5
+        B4 -->|"No"| B6
+    end
+
+    subgraph Paso3["Paso 3: Eliminar no vistos"]
+        C1["recorrer lista"]
+        C2{"visto == 0"}
+        C3["free(actual)"]
+        C4["anterior->siguiente = actual->siguiente"]
+        C1 --> C2
+        C2 -->|"Sí"| C3
+        C3 --> C4
+    end
+
+    Paso1 --> Paso2 --> Paso3
+```
+
+## 7. Ejecución
 
 ```bash
 cd programs
-gcc -O2 -Wall -o program-1 program-1.c
-./program-1
+gcc -O2 -Wall -o program-x program-x.c
+./program-x
 ```
 
-## 7. Cumplimiento del enunciado
+## 8. Cumplimiento del enunciado
 
 - Lee el directorio `/proc` con `opendir`/`readdir`: cumplido.
 - Identifica PIDs de procesos activos: cumplido (filtra entradas numéricas).
@@ -206,21 +344,21 @@ gcc -O2 -Wall -o program-1 program-1.c
 - Mantiene lista actualizada en cada ciclo: cumplido (`rewinddir` + `while(1)`).
 - Muestra la lista de PIDs en pantalla: cumplido (`imprimir_lista`).
 
-## 8. Conclusión
+## 9. Conclusión
 
 El programa demuestra cómo el directorio `/proc` es una ventana en tiempo real hacia los procesos del sistema. La estructura de lista enlazada con el flag `visto` es un patrón eficiente para detectar cambios sin tener que comparar dos listas completas: basta con asumir que todos murieron y se eliminan los que no reaparecen.
 
 Lo más interesante de esta implementación es que no necesita guardar una "instantánea" anterior del sistema. En cada ciclo, el simple hecho de recorrer `/proc` y cruzar datos con la lista existente es suficiente para saber exactamente qué proceso nació y cuál murió. Es el mismo principio que usan herramientas como `ps`, `top` o `htop` internamente.
 
-## 9. Anexo A - Comandos usados
+## 10. Anexo A - Comandos usados
 
 ```bash
 cd programs
-gcc -O2 -Wall -o program-1 program-1.c
-./program-1
+gcc -O2 -Wall -o program-x program-x.c
+./program-x
 ```
 
-## 10. Bitácora de prompts
+## 11. Bitácora de prompts
 
 Prompts usados para llegar al resultado final:
 
