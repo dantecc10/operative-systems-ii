@@ -90,29 +90,29 @@ void eliminar_no_vistos(Nodo **lista) {
     Nodo *anterior = NULL;
     Nodo *temp;
 
-    while (actual != NULL) {
+    while (actual != NULL) { // Es decir, que existe un nodo actual, y que existe la lista, y que aún no se termina de recorrerla
 
-        if (actual->visto == 0) {
+        if (actual->visto == 0) { // Si el nodo no fue visto, se elimina
 
             /* El nodo es el primero */
             if (anterior == NULL) {
-                *lista = actual->siguiente;
-                temp = actual;
-                actual = actual->siguiente;
-                free(temp);
+                *lista = actual->siguiente; // Simplemente colocamos actual al siguiente nodo para recorrer el inicio de la lista, y así el actual queda fuera de la lista
+                temp = actual; // almacenamos provisionalmente el nodo actual
+                actual = actual->siguiente; // se actualiza el nodo actual al siguiente
+                free(temp); // se libera la memoria del nodo retirado de la lista (era el primero), se deja limpia la memoria
             }
 
             /* El nodo está en medio o al final */
             else {
-                anterior->siguiente = actual->siguiente;
-                temp = actual;
-                actual = actual->siguiente;
-                free(temp);
+                anterior->siguiente = actual->siguiente; // se recorre la lista para saltar el nodo actual
+                temp = actual; // almacenamos provisionalmente el nodo actual
+                actual = actual->siguiente; // se actualiza el nodo actual al siguiente
+                free(temp); // se libera la memoria del nodo retirado de la lista
             }
 
         } else {
-            anterior = actual;
-            actual = actual->siguiente;
+            anterior = actual; // este nodo fue visto (por lo tanto existe), así que recorremos
+            actual = actual->siguiente; // se actualiza el nodo actual al siguiente
         }
     }
 }

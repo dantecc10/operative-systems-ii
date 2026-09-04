@@ -268,6 +268,142 @@ El programa recibe un argumento numérico opcional:
 - **Modo 2:** permite usar también el swap; el bloque puede ser mucho mayor, pero llenarlo entero implica pasar gigabytes por el swap y el sistema puede volverse muy lento.
 - **Modo 3:** hardcodeamos un tope de bytes para la RAM a reservar. Útil para hacer pruebas y verificar el funcionamiento del programa.
 
+### 5.6 Funciones del sistema utilizadas
+
+A continuación se describen las funciones del sistema y de la biblioteca estándar que el programa usa para reservar memoria, recorrer archivos del disco y cargar contenido en el bloque.
+
+#### `malloc()`
+
+La función `malloc()` en C reserva memoria dinámica en tiempo de ejecución.
+
+- Requerimiento: incluir `<stdlib.h>`.
+- Parámetros: recibe la cantidad de bytes a reservar.
+- Valor de retorno: devuelve un puntero al bloque asignado o `NULL` si falla.
+
+#### `free()`
+
+La función `free()` libera memoria previamente reservada con `malloc()`.
+
+- Requerimiento: incluir `<stdlib.h>`.
+- Parámetros: recibe el puntero devuelto por `malloc()`.
+- Valor de retorno: no devuelve nada.
+
+#### `opendir()`
+
+La función `opendir()` abre un directorio para su lectura.
+
+- Requerimiento: incluir `<dirent.h>`.
+- Parámetros: recibe la ruta del directorio a abrir.
+- Valor de retorno: devuelve un puntero `DIR` o `NULL` si falla.
+
+#### `readdir()`
+
+La función `readdir()` lee la siguiente entrada del directorio abierto.
+
+- Requerimiento: incluir `<dirent.h>`.
+- Parámetros: recibe el puntero a `DIR` del directorio.
+- Valor de retorno: devuelve `struct dirent *` con la siguiente entrada, o `NULL` al final.
+
+#### `stat()`
+
+La función `stat()` obtiene información de un archivo o ruta, como tipo, tamaño y permisos.
+
+- Requerimiento: incluir `<sys/stat.h>`.
+- Parámetros: recibe la ruta del archivo y un puntero a `struct stat`.
+- Valor de retorno: devuelve 0 si tuvo éxito o `-1` si ocurre un error.
+
+#### `closedir()`
+
+La función `closedir()` cierra un directorio que fue abierto con `opendir()`.
+
+- Requerimiento: incluir `<dirent.h>`.
+- Parámetros: recibe el puntero `DIR`.
+- Valor de retorno: devuelve 0 si se cerró correctamente o `-1` en caso de error.
+
+#### `qsort()`
+
+La función `qsort()` ordena un arreglo con un criterio definido por el programador.
+
+- Requerimiento: incluir `<stdlib.h>`.
+- Parámetros: recibe el arreglo, el número de elementos, el tamaño de cada elemento y una función comparadora.
+- Valor de retorno: no devuelve nada.
+
+#### `fopen()`
+
+La función `fopen()` abre un archivo para lectura o escritura.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe la ruta del archivo y el modo de apertura (`"rb"`, `"r"`, etc.).
+- Valor de retorno: devuelve un apuntador a `FILE` o `NULL` si falla.
+
+#### `fread()`
+
+La función `fread()` lee bloques de bytes desde un archivo abierto.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe el buffer destino, tamaño de cada elemento, cantidad de elementos y el flujo `FILE *`.
+- Valor de retorno: devuelve la cantidad de elementos leídos.
+
+#### `fclose()`
+
+La función `fclose()` cierra un archivo abierto con `fopen()`.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe el puntero `FILE *`.
+- Valor de retorno: devuelve 0 si se cerró bien o `EOF` si hubo error.
+
+#### `sysconf()`
+
+La función `sysconf()` consulta valores de configuración del sistema y de la plataforma.
+
+- Requerimiento: incluir `<unistd.h>`.
+- Parámetros: recibe una constante como `_SC_PHYS_PAGES` o `_SC_PAGE_SIZE`.
+- Valor de retorno: devuelve el valor pedido o `-1` si falla.
+
+### 5.7 Funciones auxiliares (propias)
+
+A continuación se describen brevemente las funciones auxiliares implementadas en el programa, sus parámetros y la salida que producen.
+
+#### `uso(const char *prog)`
+- Qué hace: Muestra en pantalla (stderr) la forma de uso del programa y los modos disponibles.
+- Parámetros: `prog` — cadena con el nombre del ejecutable (normalmente `argv[0]`).
+- Salida: Imprime el mensaje de ayuda en `stderr`. No devuelve valor (función `void`).
+
+#### `physical_ram(void)`
+- Qué hace: Calcula y devuelve la cantidad de memoria RAM física total del sistema.
+- Parámetros: ninguno.
+- Salida: devuelve un `size_t` con el número de bytes de RAM física (0 en caso de error).
+
+#### `ram_and_swap(void)`
+- Qué hace: Obtiene la suma de la RAM física y el espacio de swap disponible mediante `sysinfo`.
+- Parámetros: ninguno.
+- Salida: devuelve un `size_t` con la cantidad total de bytes (RAM + swap), o 0 si falla.
+
+#### `se_puede(size_t tamano)`
+- Qué hace: Prueba si `malloc` puede reservar un bloque de `tamano` bytes (reserva y libera inmediatamente).
+- Parámetros: `tamano` — número de bytes a comprobar.
+- Salida: devuelve `1` si la reserva tuvo éxito (se puede), `0` si no (o si `tamano == 0`).
+
+#### `buscar_maximo(size_t tope)`
+- Qué hace: Encuentra el tamaño máximo utilizable por `malloc` menor o igual a `tope`. Si `tope == SIZE_MAX` primero expande por duplicación para acotar el intervalo y luego usa búsqueda binaria.
+- Parámetros: `tope` — límite superior para la búsqueda (puede ser `SIZE_MAX` para indicar sin tope).
+- Salida: devuelve un `size_t` con el mayor número de bytes que `malloc` acepta y que además es práctico de usar.
+
+#### `comparar_desc(const void *a, const void *b)`
+- Qué hace: Comparador para `qsort` que ordena estructuras `Archivo` por tamaño de mayor a menor.
+- Parámetros: punteros genéricos a dos elementos del arreglo a comparar.
+- Salida: devuelve `-1`, `0` o `1` según el contrato de `qsort` para indicar el orden relativo.
+
+#### `dibujar(size_t bloque_tam, size_t usado, const Cargado *cargados, size_t n, const char *ultimo)`
+- Qué hace: Dibuja en la salida estándar una vista ASCII del bloque reservado: encabezado con estadísticas, barra proporcional de 70 caracteres y leyenda de programas cargados.
+- Parámetros:
+    - `bloque_tam` — tamaño total del bloque en bytes.
+    - `usado` — bytes ya ocupados dentro del bloque.
+    - `cargados` — arreglo de `Cargado` con los programas cargados.
+    - `n` — número de entradas válidas en `cargados`.
+    - `ultimo` — ruta del último binario cargado (cadena para mostrar en el encabezado).
+- Salida: imprime en `stdout` la representación ASCII del estado de la memoria y la leyenda; no devuelve valor (función `void`).
+
 ## 6. Diagramas de flujo
 
 ### 6.1 Flujo principal `main()`
@@ -480,11 +616,11 @@ Conforme avanzan las iteraciones, la barra muestra más segmentos (cada uno con 
 
 **Instrucción**: Registra todo lo que se pregunta a la IA para realizar cada una de las partes del programa.
 
-| # | Promt textual | ¿Sirve? | LLM / Agente |
-| --- | --- | --- | --- |
-| 1 | "¿Cómo se usan `opendir`, `readdir` y `stat` en C?" | ✅ | Gemini | 
-| 2 | "¿Qué variables del sistema puedo usar para determinar usando `C` estándar la RAM de mi laptop? Necesito conocer la física, la swap, la física y la swap"  | ✅  | Gemini |
-| 3 | "Dime todas las rutas desde las cuales puedo copiar binarios. Imagino que son las de sistema como /bin, /usr/bin, etc. Es tos archivos tendrán que ser revisados y copiados con C, ¿usaremos fread?" | ✅ | Gemini |
+| # | Promt textual                                                                                                                                                                                          | ¿Sirve? | LLM / Agente |
+| - | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------------ |
+| 1 | "¿Cómo se usan`opendir`, `readdir` y `stat` en C?"                                                                                                                                             | ✅       | Gemini       |
+| 2 | "¿Qué variables del sistema puedo usar para determinar usando`C` estándar la RAM de mi laptop? Necesito conocer la física, la swap, la física y la swap"                                        | ✅       | Gemini       |
+| 3 | "Dime todas las rutas desde las cuales puedo copiar binarios. Imagino que son las de sistema como /bin, /usr/bin, etc. Es tos archivos tendrán que ser revisados y copiados con C, ¿usaremos fread?" | ✅       | Gemini       |
 
 **Nota**: Gemini es mi LLM favorito y con su capacidad de "recordar" (almacenar en memoria) información sobre mí, mi uso, mi perfil de estudio, ya me responde con contexto útil. Por ejemplo, siempre que pregunto sobre algo en mi computadora, orienta su respuesta a solucionar o diagnosticar en sistemas Linux, porque no uso Windows, y lo sabe.
 

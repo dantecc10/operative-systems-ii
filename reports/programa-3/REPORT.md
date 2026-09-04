@@ -309,6 +309,96 @@ El modo automático ejecuta una secuencia predefinida que muestra:
 
 Cada paso incluye una pausa (`usleep`) para que el usuario pueda observar los cambios en la pantalla.
 
+### 5.10 Funciones del sistema utilizadas
+
+A continuación se describen las funciones más relevantes del lenguaje C y del sistema que se usan para manejar memoria simulada, validar entradas y controlar la interfaz del programa.
+
+#### `atoi()`
+La función `atoi()` convierte una cadena de texto en un entero.
+
+- Requerimiento: incluir `<stdlib.h>`.
+- Parámetros: recibe un puntero a la cadena que contiene el número.
+- Valor de retorno: devuelve el entero convertido, o 0 si no se puede interpretar correctamente.
+
+#### `strncpy()`
+La función `strncpy()` copia una cadena de caracteres a otra con longitud máxima especificada.
+
+- Requerimiento: incluir `<string.h>`.
+- Parámetros: recibe el destino, la fuente y el número máximo de caracteres a copiar.
+- Valor de retorno: devuelve el puntero al destino.
+
+#### `fgets()`
+La función `fgets()` lee una línea desde un flujo de entrada.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe un buffer, su tamaño y el flujo `FILE *`.
+- Valor de retorno: devuelve el buffer leído o `NULL` si falla.
+
+#### `usleep()`
+La función `usleep()` suspende la ejecución del programa durante un número de microsegundos.
+
+- Requerimiento: incluir `<unistd.h>`.
+- Parámetros: recibe el tiempo en microsegundos.
+- Valor de retorno: devuelve 0 si tuvo éxito o `-1` si ocurre un error.
+
+#### `printf()`
+La función `printf()` imprime texto formateado en la salida estándar.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe una cadena de formato y los argumentos correspondientes.
+- Valor de retorno: devuelve el número de caracteres impresos o un valor negativo si hay error.
+
+#### `snprintf()`
+La función `snprintf()` escribe una cadena formateada a un buffer de tamaño acotado.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe el buffer destino, el tamaño máximo, el formato y los argumentos.
+- Valor de retorno: devuelve el número de caracteres que se habrían escrito sin contar el terminador nulo.
+
+### 5.11 Funciones auxiliares (propias)
+
+A continuación se documentan brevemente las funciones auxiliares implementadas en el programa, sus parámetros y la salida esperada.
+
+#### `uso(const char *prog)`
+- Qué hace: Muestra la ayuda y las opciones de uso del programa en `stderr`.
+- Parámetros: `prog` — nombre del ejecutable (normalmente `argv[0]`).
+- Salida: imprime el mensaje de ayuda; no devuelve valor (`void`).
+
+#### `sistema_init(Sistema *s)`
+- Qué hace: Inicializa la estructura `Sistema` marcando todos los marcos como libres y poniendo `num_procesos = 0`.
+- Parámetros: `s` — puntero a la estructura `Sistema` a inicializar.
+- Salida: modifica `s` in-place; no devuelve valor (`void`).
+
+#### `asignar_memoria(Sistema *s)`
+- Qué hace: Recorre la lista de procesos y asigna marcos libres siguiendo el algoritmo `first-fit` hasta cubrir los bloques requeridos por cada proceso o hasta agotar marcos.
+- Parámetros: `s` — puntero al `Sistema` que contiene marcos y procesos.
+- Salida: actualiza `s->marcos` y `procesos[].bloques_cargados`; no devuelve valor (`void`).
+
+#### `buscar_proceso(const Sistema *s, int pid)`
+- Qué hace: Busca un proceso por `pid` en la tabla de procesos y devuelve su índice si existe.
+- Parámetros: `s` — puntero const al `Sistema`; `pid` — identificador del proceso.
+- Salida: devuelve el índice entero del proceso en `s->procesos` o `-1` si no existe.
+
+#### `mostrar_estado(const Sistema *s)`
+- Qué hace: Imprime en pantalla el estado actual del sistema simulado: marcos, tabla de procesos, y estados coloreados.
+- Parámetros: `s` — puntero const al `Sistema`.
+- Salida: imprime información formateada en `stdout`; no devuelve valor (`void`).
+
+#### `agregar_proceso(Sistema *s, int pid, const char *nombre, int bloques)`
+- Qué hace: Valida y añade un nuevo proceso a la cola, inicializa sus campos y llama a `asignar_memoria`.
+- Parámetros: `s` — puntero al `Sistema`; `pid` — identificador; `nombre` — cadena con el nombre; `bloques` — número de bloques solicitados.
+- Salida: devuelve `0` en éxito, `-1` cola llena, `-2` PID duplicado, `-3` bloques inválidos.
+
+#### `liberar_proceso(Sistema *s, int pid)`
+- Qué hace: Libera los marcos ocupados por `pid`, elimina el proceso de la cola y vuelve a llamar a `asignar_memoria`.
+- Parámetros: `s` — puntero al `Sistema`; `pid` — identificador a liberar.
+- Salida: devuelve `0` en éxito o `-1` si no se encontró el proceso; además imprime un mensaje de confirmación.
+
+#### `modo_crear(Sistema *s)`, `modo_liberar(Sistema *s)`, `modo_menu(Sistema *s)`, `modo_auto(Sistema *s)`
+- Qué hacen: Interfaces (interactivas o automáticas) para crear procesos, liberar procesos, mostrar el menú o ejecutar la demostración automática.
+- Parámetros: `s` — puntero al `Sistema` sobre el que operan.
+- Salida: interactúan con el usuario o imprimen la secuencia de la demo; no devuelven valor (`void`) salvo códigos de error impresos en pantalla.
+
 ## 6. Diagramas de flujo
 
 ### 6.1 Flujo principal `main()`

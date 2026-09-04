@@ -348,6 +348,120 @@ int es_numero(const char *s) {
 
 El cast `(unsigned char)` es necesario porque `isdigit` espera un valor no negativo.
 
+### 5.12 Funciones del sistema utilizadas
+
+A continuación se describen las funciones de la biblioteca estándar y del sistema que se usan para leer `/proc`, validar PIDs y clasificar la memoria de un proceso.
+
+#### `sysconf()`
+La función `sysconf()` obtiene parámetros del sistema en tiempo de ejecución.
+
+- Requerimiento: incluir `<unistd.h>`.
+- Parámetros: recibe una constante como `_SC_PAGESIZE` para consultar el tamaño de página.
+- Valor de retorno: devuelve el valor configurado o `-1` si falla.
+
+#### `opendir()`
+La función `opendir()` abre un directorio para iterar sobre sus entradas.
+
+- Requerimiento: incluir `<dirent.h>`.
+- Parámetros: recibe la ruta del directorio a abrir.
+- Valor de retorno: devuelve un puntero `DIR` o `NULL` en caso de error.
+
+#### `readdir()`
+La función `readdir()` recorre las entradas de un directorio abierto.
+
+- Requerimiento: incluir `<dirent.h>`.
+- Parámetros: recibe el puntero `DIR`.
+- Valor de retorno: devuelve `struct dirent *` con la siguiente entrada o `NULL` al final.
+
+#### `closedir()`
+La función `closedir()` cierra un directorio abierto con `opendir()`.
+
+- Requerimiento: incluir `<dirent.h>`.
+- Parámetros: recibe el puntero `DIR`.
+- Valor de retorno: devuelve 0 si se cerró bien o `-1` si hubo error.
+
+#### `fopen()`
+La función `fopen()` abre un archivo del sistema, como `/proc/[pid]/maps` o `/proc/[pid]/status`.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe la ruta del archivo y el modo de apertura (`"r"`, `"rb"`, etc.).
+- Valor de retorno: devuelve un puntero `FILE *` o `NULL` si no pudo abrirse.
+
+#### `fgets()`
+La función `fgets()` lee una línea completa de un archivo abierto.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe el buffer, el tamaño y el flujo `FILE *`.
+- Valor de retorno: devuelve el mismo buffer si tuvo éxito o `NULL` si ocurre un error o llega al final.
+
+#### `sscanf()`
+La función `sscanf()` extrae datos formateados desde una cadena de texto.
+
+- Requerimiento: incluir `<stdio.h>`.
+- Parámetros: recibe la cadena fuente y un formato que describe qué valores deben leerse.
+- Valor de retorno: devuelve el número de elementos convertidos correctamente.
+
+#### `strncmp()`
+La función `strncmp()` compara dos cadenas con un máximo de caracteres.
+
+- Requerimiento: incluir `<string.h>`.
+- Parámetros: recibe las cadenas a comparar y la longitud máxima.
+- Valor de retorno: devuelve un valor menor, mayor o igual a cero según el orden lexicográfico.
+
+#### `strstr()`
+La función `strstr()` busca una subcadena dentro de otra.
+
+- Requerimiento: incluir `<string.h>`.
+- Parámetros: recibe la cadena completa y la subcadena que se quiere localizar.
+- Valor de retorno: devuelve un puntero a la primera coincidencia o `NULL` si no existe.
+
+#### `isdigit()`
+La función `isdigit()` comprueba si un carácter es un dígito numérico.
+
+- Requerimiento: incluir `<ctype.h>`.
+- Parámetros: recibe un entero que representa el carácter a evaluar.
+- Valor de retorno: devuelve un valor distinto de cero si es un dígito, y 0 si no lo es.
+
+### 6. Funciones auxiliares (propias)
+
+Las funciones definidas por el programa se describen brevemente a continuación (qué hacen, parámetros y salida).
+
+#### `es_numero(const char *s)`
+
+- Qué hace: Verifica si la cadena `s` contiene solo dígitos (útil para filtrar entradas de `/proc`).
+- Parámetros: `s` — puntero a la cadena a validar.
+- Salida: devuelve `1` si es numérica, `0` en caso contrario.
+
+#### `formato_tamano(unsigned long bytes, char *buf, size_t bufsz)`
+
+- Qué hace: Convierte `bytes` a una representación legible (B, KB, MB, GB) y la escribe en `buf` respetando `bufsz`.
+- Parámetros: `bytes` — número de bytes; `buf` — buffer destino; `bufsz` — tamaño del buffer.
+- Salida: escribe la cadena formateada en `buf`; no devuelve valor (`void`).
+
+#### `mostrar_info_proceso(const char *pid)`
+
+- Qué hace: Lee `/proc/[pid]/statm` y `/proc/[pid]/status` para mostrar tamaño total, residente y nombre del proceso.
+- Parámetros: `pid` — cadena con el PID del proceso a analizar.
+- Salida: imprime información en `stdout`; no devuelve valor (`void`).
+
+#### `analizar_mapa_memoria(const char *pid)`
+
+- Qué hace: Lee `/proc/[pid]/maps`, parsea cada mapeo (direcciones, permisos, nombre), calcula tamaños y clasifica por tipo (heap, stack, .so, etc.) y muestra un listado coloreado.
+- Parámetros: `pid` — cadena con el PID a analizar.
+- Salida: imprime el mapa de memoria y un resumen con totales y conteos de permisos; no devuelve valor (`void`).
+
+#### `listar_procesos(void)`
+
+- Qué hace: Recorre `/proc`, filtra entradas numéricas y lee `/proc/[pid]/comm` para mostrar una lista de PIDs y nombres.
+- Parámetros: ninguno.
+- Salida: imprime la lista de procesos en `stdout`; no devuelve valor (`void`).
+
+#### `uso(const char *prog)`
+
+- Qué hace: Imprime la ayuda y las opciones de uso del programa en `stderr`.
+- Parámetros: `prog` — nombre del ejecutable.
+- Salida: imprime el mensaje de ayuda; no devuelve valor (`void`).
+
 ## 6. Diagramas de flujo
 
 ### 6.1 Flujo principal `main()`

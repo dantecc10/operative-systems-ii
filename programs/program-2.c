@@ -73,7 +73,6 @@ static size_t ram_and_swap(void)
 
 /*
  * Verifica si malloc puede otorgar un bloque de 'tamano' bytes.
- * Con overcommit=0 (heuristica por defecto de Linux) el propio
  * malloc rechaza peticiones que exceden el limite de memoria
  * comprometida, asi que basta con probar la llamada.  La utilidad
  * real del bloque se confirma mas adelante cuando se copian los
