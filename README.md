@@ -76,3 +76,35 @@ El almacenamiento virtual se asocia con la capacidad de direccionar un espacio d
     - Paginación
     - Segmentación
     - Paginación / segmentación
+
+## Archivos
+
+### Métodos de implantación de archivos
+- Asignación adycente
+- Asignación en forma de lista ligada
+- Asignación mediante una lista ligada y un índice
+
+- fat (file assignment table)
+
+### Nodos índice
+
+- Dirección en disco
+  - Atributos
+    - Bloque simplemente indirecto
+    - Bloque doblemente indirecto
+    - Bloque triplemente indirecto
+
+El sistema NTFS contiene las direcciones asociados a los archivos de un disco. Los atributos se almacenan en la de root.
+
+Para el caso de Linux, los discos manejan los nodos índice.
+
+Windows: Tabla de asignación de archivos.
+Linux: Nodos índice.
+
+La clase pasada vimos en qué posición se encontraba el superbloque.
+Ahora hay que leer el superbloque.
+
+
+> _"Realizar un programa que lea y muestre el contenido del superbloque"._
+
+> _"Realizar un programa que lea y muestre el contenido del directorio `root` sin usar `opendir()` ni `readdir()`"_

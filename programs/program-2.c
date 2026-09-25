@@ -26,6 +26,8 @@ typedef struct
     char nombre[MAX_NOMBRE];
     off_t tamano;
     size_t offset; /* Desfase dentro del bloque */
+    void *direccion_inicial;
+    void *direccion_final;
 } Cargado;
 
 static const char *DIRECTORIOS[] = {
@@ -222,9 +224,10 @@ static void dibujar(size_t bloque_tam, size_t usado,
     printf("\n  Programas lanzados:\n");
     for (i = 0; i < n; i++)
     {
-        printf("   %3zu) %-28s %12lld B   offset %12zu   (%5.2f%%)\n",
+        printf("   %3zu) %-28s %12lld B   offset %12zu   inicio %p   fin %p   (%5.2f%%)\n",
                i + 1, cargados[i].nombre, (long long)cargados[i].tamano,
                cargados[i].offset,
+               cargados[i].direccion_inicial, cargados[i].direccion_final,
                100.0 * (double)cargados[i].tamano / (double)bloque_tam);
     }
 
@@ -273,7 +276,7 @@ int main(int argc, char **argv)
         tope = ram_and_swap();
         break;
     case 3:
-        tope = 1143525669; // Aquí hardcodeo un valor (lo de 14 GB / 14)
+        tope = 1143525669; // Aquí hardcodeo un valor
         break;
     default:
         tope = SIZE_MAX;
@@ -328,7 +331,8 @@ int main(int argc, char **argv)
             if (stat(ruta, &st) != 0)
                 continue;
 
-            if (!S_ISREG(st.st_mode) || st.st_size <= 0)
+            // Validar S_IXUSR
+            if (!S_ISREG(st.st_mode) || st.st_size <= 0 || !(st.st_mode & S_IXUSR))
                 continue;
 
             if (n_archivos == cap_archivos)
@@ -409,6 +413,9 @@ int main(int argc, char **argv)
         cargados[n_cargados].nombre[MAX_NOMBRE - 1] = '\0';
         cargados[n_cargados].tamano = archivos[i].tamano;
         cargados[n_cargados].offset = usado;
+        cargados[n_cargados].direccion_inicial = memoria + usado;
+        cargados[n_cargados].direccion_final =
+            memoria + usado + (size_t)archivos[i].tamano - 1;
 
         usado += (size_t)archivos[i].tamano;
         n_cargados++;
